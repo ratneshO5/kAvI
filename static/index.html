@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>kAvI Web</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="app-header">
+        <h1>kAvI</h1>
+        <p class="subtitle">A poetic companion for thoughts.</p>
+      </header>
+
+      <section class="workspace">
+        <form id="post-form" class="panel controls-panel">
+          <label for="topic">Topic (optional)</label>
+          <input id="topic" name="topic" type="text" placeholder="What is on your mind?" />
+
+          <label for="image_file">Image (optional)</label>
+          <input id="image_file" class="visually-hidden" name="image_file" type="file" accept="image/*" multiple />
+          <div id="drop-zone" class="drop-zone" tabindex="0" role="button" aria-label="Image uploader">
+            Drop image(s), paste image, or click to browse
+          </div>
+          <p id="image-name" class="image-name"></p>
+
+          <section id="left-image-preview" class="left-image-preview hidden" aria-label="Selected images quick preview">
+            <div class="left-preview-frame">
+              <button id="left-prev-image" class="preview-nav left-nav" type="button" aria-label="Previous image">&lt;</button>
+              <img id="left-preview-image" alt="Selected image quick preview" />
+              <button id="left-next-image" class="preview-nav left-nav" type="button" aria-label="Next image">&gt;</button>
+            </div>
+            <div class="left-preview-footer">
+              <span id="left-image-counter">0 / 0</span>
+              <div id="left-preview-dots" class="preview-dots" aria-label="Left image positions"></div>
+            </div>
+          </section>
+
+          <label for="tone">Tone</label>
+          <select id="tone" name="tone">
+            <option value="kAvI" selected>kAvI (Default)</option>
+            <optgroup label="TONES">
+              <option value="Minimalist">Minimalist</option>
+              <option value="Brutalist">Brutalist</option>
+              <option value="Aggressive/Defiant">Aggressive/Defiant</option>
+              <option value="Grunge">Grunge</option>
+              <option value="Vintage/Retro">Vintage/Retro</option>
+              <option value="Futuristic">Futuristic</option>
+              <option value="Melancholic">Melancholic</option>
+              <option value="Nostalgic">Nostalgic</option>
+              <option value="Passionate">Passionate</option>
+              <option value="Euphoric">Euphoric</option>
+              <option value="Spiritual">Spiritual</option>
+              <option value="Intellectual">Intellectual</option>
+              <option value="Optimistic">Optimistic</option>
+              <option value="Abstract">Abstract</option>
+              <option value="Satirical">Satirical</option>
+            </optgroup>
+            <optgroup label="SPECIAL MODES">
+              <option value="Raw Delhi Mode">Seedhe Maut</option>
+              <option value="Chaotic Humor Mode">Deadpool</option>
+              <option value="Street Emotional Mode">Jesse Pinkman</option>
+              <option value="Witty Strategist Mode">Tyrion Lannister</option>
+            </optgroup>
+          </select>
+
+          <button id="generate-btn" type="submit">Generate</button>
+        </form>
+
+        <section class="panel preview-panel">
+          <article id="insta-post" class="insta-post no-media">
+            <header id="insta-header" class="insta-header">
+              <div class="insta-avatar">k</div>
+              <div>
+                <p class="insta-handle">kAvI</p>
+                <p class="insta-meta">Interpret it poetically</p>
+              </div>
+            </header>
+
+            <section id="post-layout" class="post-layout no-media">
+              <section id="image-preview" class="image-preview hidden" aria-label="Selected images preview">
+                <div class="preview-frame">
+                  <button id="prev-image" class="preview-nav" type="button" aria-label="Previous image">&lt;</button>
+                  <img id="preview-image" alt="Selected image preview" />
+                  <button id="next-image" class="preview-nav" type="button" aria-label="Next image">&gt;</button>
+                </div>
+                <div class="preview-header">
+                  <span id="image-counter">0 / 0</span>
+                </div>
+                <div id="preview-dots" class="preview-dots" aria-label="Image positions"></div>
+              </section>
+
+              <section class="insta-caption-block">
+                <div class="caption-tools">
+                  <button id="copy-caption" class="copy-caption-btn" type="button" aria-label="Copy caption">
+                    <svg width="20" height="20" viewBox="-2.4 -2.4 28.80 28.80" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                      <path d="M7.5 3H14.6C16.8402 3 17.9603 3 18.816 3.43597C19.5686 3.81947 20.1805 4.43139 20.564 5.18404C21 6.03969 21 7.15979 21 9.4V16.5M6.2 21H14.3C15.4201 21 15.9802 21 16.408 20.782C16.7843 20.5903 17.0903 20.2843 17.282 19.908C17.5 19.4802 17.5 18.9201 17.5 17.8V9.7C17.5 8.57989 17.5 8.01984 17.282 7.59202C17.0903 7.21569 16.7843 6.90973 16.408 6.71799C15.9802 6.5 15.4201 6.5 14.3 6.5H6.2C5.0799 6.5 4.51984 6.5 4.09202 6.71799C3.71569 6.90973 3.40973 7.21569 3.21799 7.59202C3 8.01984 3 8.57989 3 9.7V17.8C3 18.9201 3 19.4802 3.21799 19.908C3.40973 20.2843 3.71569 20.5903 4.09202 20.782C4.51984 21 5.0799 21 6.2 21Z" stroke="currentColor" stroke-width="0.85" stroke-linecap="round" stroke-linejoin="round"></path>
+                    </svg>
+                  </button>
+                </div>
+                <p id="status" role="status" aria-live="polite"></p>
+                <article id="output" class="output" aria-live="polite"></article>
+              </section>
+            </section>
+
+            <section id="post-empty" class="post-empty">
+              Generate a post to preview it here.
+            </section>
+          </article>
+        </section>
+      </section>
+    </main>
+    <script src="/static/app.js"></script>
+  </body>
+</html>

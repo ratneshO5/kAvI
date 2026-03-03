@@ -4,13 +4,30 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>kAvI Web</title>
+    <link rel="icon" type="image/png" href="/static/app-icon.png" />
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
   <body>
     <main class="app-shell">
       <header class="app-header">
-        <h1>kAvI</h1>
-        <p class="subtitle">A poetic companion for thoughts.</p>
+        <div class="app-title-wrap">
+          <div class="app-title-row">
+            <h1>kAvI</h1>
+          </div>
+          <p class="subtitle">A poetic companion for thoughts.</p>
+        </div>
+        <div class="nav-right">
+          <a href="/download/windows"
+             class="download-btn"
+             target="_blank"
+             rel="noopener noreferrer">
+            <svg class="win-icon" viewBox="0 0 24 24">
+              <path fill="white"
+                d="M1 3l9-1.5v9H1V3zm10-1.7L23 0v10H11V1.3zM1 11h9v9L1 18.5V11zm10 0h12v10l-12-1.5V11z"/>
+            </svg>
+            <span>Download for Windows</span>
+          </a>
+        </div>
       </header>
 
       <section class="workspace">

@@ -34,6 +34,9 @@ let postImageIndex = 0;
 let hasGenerated = false;
 let latestCaption = '';
 let copyFeedbackTimeout = null;
+const IMAGE_NAME_PATTERN = /\.(png|jpe?g|gif|webp|bmp|heic|heif|avif)$/i;
+const MAX_UPLOAD_EDGE = 1600;
+const JPEG_QUALITY = 0.82;
 
 const COPY_ICON_SVG = `
 <svg width="20" height="20" viewBox="-2.4 -2.4 28.80 28.80" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -152,30 +155,88 @@ const fileFromClipboard = (event) => {
   return files;
 };
 
+const isLikelyImageFile = (file) => {
+  const mime = (file.type || '').toLowerCase();
+  const name = file.name || '';
+  return mime.startsWith('image/') || IMAGE_NAME_PATTERN.test(name);
+};
+
+const readAsDataUrl = (file) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Failed to read image file.'));
+    reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+    reader.readAsDataURL(file);
+  });
+};
+
+const loadImage = (src) => {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error('Failed to decode image.'));
+    img.src = src;
+  });
+};
+
+const optimizeImageDataUrl = async (file) => {
+  const original = await readAsDataUrl(file);
+  const mime = (file.type || '').toLowerCase();
+
+  // Keep GIF original to avoid flattening animation frames.
+  if (mime === 'image/gif') {
+    return { dataUrl: original, mimeType: 'image/gif' };
+  }
+
+  const img = await loadImage(original);
+  const maxEdge = Math.max(img.width, img.height);
+  if (maxEdge <= MAX_UPLOAD_EDGE) {
+    const fallbackMime = mime.startsWith('image/') ? mime : 'image/jpeg';
+    return { dataUrl: original, mimeType: fallbackMime };
+  }
+
+  const scale = MAX_UPLOAD_EDGE / maxEdge;
+  const targetWidth = Math.max(1, Math.round(img.width * scale));
+  const targetHeight = Math.max(1, Math.round(img.height * scale));
+  const canvas = document.createElement('canvas');
+  canvas.width = targetWidth;
+  canvas.height = targetHeight;
+  const context = canvas.getContext('2d');
+  if (!context) {
+    const fallbackMime = mime.startsWith('image/') ? mime : 'image/jpeg';
+    return { dataUrl: original, mimeType: fallbackMime };
+  }
+
+  context.drawImage(img, 0, 0, targetWidth, targetHeight);
+  const outputMime = (mime === 'image/png' || mime === 'image/webp') ? mime : 'image/jpeg';
+  const resized = canvas.toDataURL(outputMime, JPEG_QUALITY);
+  return { dataUrl: resized, mimeType: outputMime };
+};
+
 const fileToSelectedImage = (file) => {
   return new Promise((resolve, reject) => {
-    if (!file.type.startsWith('image/')) {
+    if (!isLikelyImageFile(file)) {
       reject(new Error('Only image files are supported.'));
       return;
     }
 
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error('Failed to read image file.'));
-    reader.onload = () => {
-      const result = typeof reader.result === 'string' ? reader.result : '';
-      const base64 = result.includes(',') ? result.split(',')[1] : '';
-      if (!base64) {
-        reject(new Error('Invalid image encoding.'));
-        return;
-      }
-      resolve({
-        base64,
-        mimeType: file.type || 'image/png',
-        name: file.name || 'Pasted image',
-        previewUrl: URL.createObjectURL(file),
+    optimizeImageDataUrl(file)
+      .then(({ dataUrl, mimeType }) => {
+        const base64 = dataUrl.includes(',') ? dataUrl.split(',')[1] : '';
+        if (!base64) {
+          reject(new Error('Invalid image encoding.'));
+          return;
+        }
+        resolve({
+          base64,
+          mimeType,
+          name: file.name || 'Pasted image',
+          previewUrl: URL.createObjectURL(file),
+        });
+      })
+      .catch((error) => {
+        reject(error instanceof Error ? error : new Error('Failed to process image.'));
       });
-    };
-    reader.readAsDataURL(file);
   });
 };
 

@@ -8,6 +8,7 @@ import uvicorn
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
+from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -31,6 +32,7 @@ def _load_environment() -> None:
 _load_environment()
 DEFAULT_GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
 HF_BLIP_MODEL = "Salesforce/blip2-opt-2.7b"
+WINDOWS_INSTALLER_URL = os.getenv("WINDOWS_INSTALLER_URL", "").strip()
 
 VOICE_PROFILES = {
     "kAvI": """
@@ -346,6 +348,18 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@app.get("/download/windows")
+def download_windows_installer() -> RedirectResponse:
+    _load_environment()
+    installer_url = os.getenv("WINDOWS_INSTALLER_URL", "").strip() or WINDOWS_INSTALLER_URL
+    if not installer_url:
+        raise HTTPException(
+            status_code=404,
+            detail="Windows installer is not configured yet.",
+        )
+    return RedirectResponse(url=installer_url, status_code=307)
+
+
 @app.post("/generate")
 def generate_post(payload: GenerateRequest) -> dict[str, Any]:
     prompt = _build_prompt(payload)
@@ -358,4 +372,7 @@ def generate_post(payload: GenerateRequest) -> dict[str, Any]:
 
 
 if __name__ == "__main__":
-    uvicorn.run("app:app", host="127.0.0.1", port=8000, reload=True)
+    host = os.getenv("HOST", "127.0.0.1")
+    port = int(os.getenv("PORT", "8000"))
+    reload_enabled = os.getenv("UVICORN_RELOAD", "0").lower() in {"1", "true", "yes"}
+    uvicorn.run("app:app", host=host, port=port, reload=reload_enabled)

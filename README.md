@@ -15,6 +15,7 @@ pip install -r requirements.txt
 
 - `GROQ_API_KEY`
 - `HF_API_KEY`
+- `WINDOWS_INSTALLER_URL` (public URL of your desktop installer `.exe`)
 
 ## Run
 

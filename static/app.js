@@ -1,6 +1,8 @@
 const form = document.getElementById('post-form');
 const topicInput = document.getElementById('topic');
 const imageFileInput = document.getElementById('image_file');
+const imageModelSelect = document.getElementById('image-model');
+const openImageSettingsButton = document.getElementById('open-image-settings');
 const dropZone = document.getElementById('drop-zone');
 const imageName = document.getElementById('image-name');
 const toneSelect = document.getElementById('tone');
@@ -12,6 +14,26 @@ const instaHeader = document.getElementById('insta-header');
 const postLayout = document.getElementById('post-layout');
 const instaPost = document.getElementById('insta-post');
 const postEmpty = document.getElementById('post-empty');
+const imageSettingsModal = document.getElementById('image-settings-modal');
+const aspectRatioSelect = document.getElementById('setting-aspect-ratio');
+const imageCountSelect = document.getElementById('setting-image-count');
+const artStyleSelect = document.getElementById('setting-art-style');
+const artStyleOptions = Array.from(document.querySelectorAll('.art-style-option'));
+const customStyleWrap = document.getElementById('custom-style-wrap');
+const customStyleInput = document.getElementById('setting-custom-style');
+const customPromptInput = document.getElementById('setting-custom-prompt');
+const closeImageSettingsButton = document.getElementById('close-image-settings');
+const saveImageSettingsButton = document.getElementById('save-image-settings');
+const contextMenu = document.getElementById('context-menu');
+const ctxCut = document.getElementById('ctx-cut');
+const ctxCopy = document.getElementById('ctx-copy');
+const ctxPaste = document.getElementById('ctx-paste');
+const ctxRegenerate = document.getElementById('ctx-regenerate');
+const ctxReload = document.getElementById('ctx-reload');
+const ctxClear = document.getElementById('ctx-clear');
+const ctxCopyCaption = document.getElementById('ctx-copy-caption');
+const ctxCopyImage = document.getElementById('ctx-copy-image');
+const ctxDownloadImage = document.getElementById('ctx-download-image');
 
 const leftImagePreview = document.getElementById('left-image-preview');
 const leftPreviewImage = document.getElementById('left-preview-image');
@@ -33,7 +55,17 @@ let selectedImageIndex = 0;
 let postImageIndex = 0;
 let hasGenerated = false;
 let latestCaption = '';
+let allowTextOnlyPost = false;
 let copyFeedbackTimeout = null;
+let contextMenuTarget = null;
+let contextMenuImageEl = null;
+const imageGenerationSettings = {
+  aspect_ratio: '1:1',
+  image_count: 1,
+  art_style: 'Illustration',
+  custom_art_style: '',
+  custom_prompt: '',
+};
 const IMAGE_NAME_PATTERN = /\.(png|jpe?g|gif|webp|bmp|heic|heif|avif)$/i;
 const MAX_UPLOAD_EDGE = 1600;
 const JPEG_QUALITY = 0.82;
@@ -53,7 +85,14 @@ const COPIED_ICON_SVG = `
 const setLoading = (isLoading) => {
   button.disabled = isLoading;
   button.textContent = isLoading ? 'Writing...' : 'Generate';
-  status.textContent = isLoading ? 'kAvI is writing...' : '';
+  if (isLoading) {
+    status.textContent = 'kAvI is writing...';
+    status.className = '';
+    return;
+  }
+  if (status.textContent === 'kAvI is writing...' && !status.className) {
+    clearStatus();
+  }
 };
 
 const setError = (message) => {
@@ -66,17 +105,164 @@ const clearStatus = () => {
   status.className = '';
 };
 
+const setPostEmptyMessage = (message) => {
+  postEmpty.textContent = message;
+};
+
+const updateImageModelAvailability = () => {
+  if (!imageModelSelect) return;
+  const hasUserImageInput = selectedImages.length > 0;
+  imageModelSelect.disabled = hasUserImageInput;
+  if (openImageSettingsButton) {
+    const shouldShowAdvanced = imageModelSelect.value !== 'none';
+    openImageSettingsButton.classList.toggle('hidden', !shouldShowAdvanced);
+    openImageSettingsButton.disabled = hasUserImageInput;
+  }
+};
+
+const openImageSettingsModal = () => {
+  if (!imageSettingsModal) return;
+  aspectRatioSelect.value = imageGenerationSettings.aspect_ratio;
+  imageCountSelect.value = String(imageGenerationSettings.image_count);
+  const useCustomStyle = (imageGenerationSettings.custom_art_style || '').trim().length > 0;
+  setArtStyleSelection(useCustomStyle ? 'Custom' : (imageGenerationSettings.art_style || artStyleSelect.value || 'Illustration'));
+  if (customStyleInput) {
+    customStyleInput.value = imageGenerationSettings.custom_art_style || '';
+  }
+  customPromptInput.value = imageGenerationSettings.custom_prompt;
+  imageSettingsModal.classList.remove('hidden');
+};
+
+const closeImageSettingsModal = () => {
+  if (!imageSettingsModal) return;
+  imageSettingsModal.classList.add('hidden');
+};
+
+const setArtStyleSelection = (style) => {
+  const selectedStyle = (style || 'Illustration').trim();
+  artStyleSelect.value = selectedStyle;
+  const isCustom = selectedStyle === 'Custom';
+  customStyleWrap?.classList.toggle('hidden', !isCustom);
+  artStyleOptions.forEach((option) => {
+    const isActive = option.dataset.style === selectedStyle;
+    option.classList.toggle('active', isActive);
+    option.setAttribute('aria-checked', isActive ? 'true' : 'false');
+  });
+};
+
+const loadArtStyleThumbnails = async () => {
+  try {
+    const response = await fetch('/image-style-thumbnails');
+    const data = await response.json();
+    const thumbnails = data?.thumbnails || {};
+    artStyleOptions.forEach((option) => {
+      const style = option.dataset.style;
+      const thumb = option.querySelector('.art-style-thumb');
+      const thumbUrl = thumbnails[style];
+      if (thumb && thumbUrl) {
+        thumb.style.backgroundImage = `url(${thumbUrl})`;
+        thumb.classList.add('thumb-loaded');
+      }
+    });
+  } catch {
+    // Keep fallback gradients if thumbnail generation endpoint is unavailable.
+  }
+};
+
+const flashStatus = (message, durationMs = 1800) => {
+  status.textContent = message;
+  status.className = 'status-copy-flash';
+  window.setTimeout(() => {
+    if (status.className === 'status-copy-flash' && status.textContent === message) {
+      clearStatus();
+    }
+  }, durationMs);
+};
+
+const isTextInputElement = (target) => {
+  return (
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLTextAreaElement
+  );
+};
+
+const canPasteIntoTarget = (target) => {
+  if (target instanceof HTMLTextAreaElement) return !target.disabled && !target.readOnly;
+  if (target instanceof HTMLInputElement) {
+    const type = (target.type || 'text').toLowerCase();
+    const textLike = ['text', 'search', 'url', 'tel', 'password', 'email', 'number'];
+    return textLike.includes(type) && !target.disabled && !target.readOnly;
+  }
+  if (target instanceof HTMLElement && target.isContentEditable) return true;
+  return false;
+};
+
+const hasTextSelection = () => {
+  const selection = window.getSelection();
+  return !!selection && selection.toString().trim().length > 0;
+};
+
+const hideContextMenu = () => {
+  contextMenu?.classList.add('hidden');
+  contextMenuTarget = null;
+  contextMenuImageEl = null;
+};
+
+const updateContextMenuState = () => {
+  const editable = canPasteIntoTarget(contextMenuTarget);
+  const selectedText = hasTextSelection();
+  const inputSelection = isTextInputElement(contextMenuTarget)
+    ? contextMenuTarget.selectionStart !== contextMenuTarget.selectionEnd
+    : false;
+  const canCutCopyFromInput = isTextInputElement(contextMenuTarget) && inputSelection;
+
+  ctxCut.disabled = !canCutCopyFromInput;
+  ctxCopy.disabled = !(selectedText || canCutCopyFromInput || latestCaption.trim());
+  ctxPaste.disabled = !editable;
+  ctxRegenerate.disabled = button.disabled;
+  ctxReload.disabled = false;
+  ctxClear.disabled = !hasGenerated && !latestCaption.trim();
+  ctxCopyCaption.disabled = !latestCaption.trim();
+  ctxCopyImage.disabled = !contextMenuImageEl || !contextMenuImageEl.src;
+  ctxDownloadImage.disabled = !contextMenuImageEl || !contextMenuImageEl.src;
+};
+
+const showContextMenu = (x, y) => {
+  if (!contextMenu) return;
+  contextMenu.classList.remove('hidden');
+  const rect = contextMenu.getBoundingClientRect();
+  const maxLeft = window.innerWidth - rect.width - 8;
+  const maxTop = window.innerHeight - rect.height - 8;
+  contextMenu.style.left = `${Math.max(8, Math.min(x, maxLeft))}px`;
+  contextMenu.style.top = `${Math.max(8, Math.min(y, maxTop))}px`;
+};
+
 const updatePostVisibility = () => {
-  const preGenerate = !hasGenerated;
-  instaPost.classList.toggle('pre-generate', preGenerate);
-  postEmpty.classList.toggle('hidden', !preGenerate);
-  instaHeader.classList.toggle('hidden', preGenerate);
-  postLayout.classList.toggle('hidden', preGenerate);
-  copyButton.disabled = preGenerate || latestCaption.trim().length === 0;
+  const hasRenderablePost = hasGenerated && (postImages.length > 0 || allowTextOnlyPost);
+  instaPost.classList.toggle('pre-generate', !hasRenderablePost);
+  postEmpty.classList.toggle('hidden', hasRenderablePost);
+  instaHeader.classList.toggle('hidden', !hasRenderablePost);
+  postLayout.classList.toggle('hidden', !hasRenderablePost);
+  copyButton.disabled = !hasRenderablePost || latestCaption.trim().length === 0;
 };
 
 const preventDefaultDropBehavior = (event) => {
   event.preventDefault();
+};
+
+const isInsideDropZone = (target) => {
+  return target instanceof Node && dropZone.contains(target);
+};
+
+const extractDroppedFiles = (event) => {
+  const dt = event.dataTransfer;
+  if (!dt) return [];
+  const itemFiles = Array.from(dt.items || [])
+    .filter((item) => item.kind === 'file')
+    .map((item) => item.getAsFile())
+    .filter(Boolean);
+  if (itemFiles.length > 0) return itemFiles;
+  return Array.from(dt.files || []);
 };
 
 const revokeImageUrls = () => {
@@ -232,6 +418,7 @@ const fileToSelectedImage = (file) => {
           mimeType,
           name: file.name || 'Pasted image',
           previewUrl: URL.createObjectURL(file),
+          source: 'user',
         });
       })
       .catch((error) => {
@@ -245,11 +432,30 @@ const setSelectedImages = async (files) => {
     return;
   }
 
-  const resolved = await Promise.all(files.map((file) => fileToSelectedImage(file)));
+  const imageFiles = files.filter((file) => isLikelyImageFile(file));
+  if (imageFiles.length === 0) {
+    throw new Error('Drop image files only.');
+  }
+
+  const resolved = await Promise.all(imageFiles.map((file) => fileToSelectedImage(file)));
   const previousLength = selectedImages.length;
   selectedImages = [...selectedImages, ...resolved];
   selectedImageIndex = previousLength;
+  updateImageModelAvailability();
   renderCarousel();
+};
+
+const handleIncomingFiles = async (files) => {
+  if (!files || files.length === 0) {
+    setError('Drop image files only.');
+    return;
+  }
+  try {
+    await setSelectedImages(files);
+    clearStatus();
+  } catch (error) {
+    setError(error instanceof Error ? error.message : 'Invalid image.');
+  }
 };
 
 const renderPoem = (text) => {
@@ -292,6 +498,8 @@ const clearGeneratedOutput = () => {
   postImages = [];
   postImageIndex = 0;
   hasGenerated = false;
+  allowTextOnlyPost = false;
+  setPostEmptyMessage('Generate a post to preview it here.');
   clearStatus();
   updatePostVisibility();
   renderCarousel();
@@ -303,9 +511,15 @@ const generatePost = async () => {
 
   const topic = topicInput.value.trim();
   const tone = toneSelect.value;
-  const requestImages = selectedImages.length > 0 ? selectedImages : postImages;
+  const selectedImageModel = imageModelSelect?.value || 'flux';
+  const reusablePostImages = postImages.filter((img) => img.source === 'user');
+  const requestImages = selectedImages.length > 0 ? selectedImages : reusablePostImages;
+  const hasImageInput = requestImages.length > 0 || selectedImageModel !== 'none';
+  const isNoImageAndModelNone = requestImages.length === 0 && selectedImageModel === 'none';
+  const shouldGenerateFluxImage = requestImages.length === 0 && selectedImageModel === 'flux';
+  let imageGenerationFailureMessage = '';
 
-  if (!topic && requestImages.length === 0) {
+  if (!topic && !hasImageInput) {
     setError('Add a topic or image first.');
     return;
   }
@@ -314,6 +528,8 @@ const generatePost = async () => {
     postImages = [...requestImages];
     postImageIndex = 0;
     hasGenerated = true;
+    allowTextOnlyPost = false;
+    setPostEmptyMessage('Generating post image...');
     updatePostVisibility();
     renderCarousel();
     setLoading(true);
@@ -324,6 +540,8 @@ const generatePost = async () => {
       body: JSON.stringify({
         topic,
         tone,
+        include_generated_image: shouldGenerateFluxImage,
+        image_settings: imageGenerationSettings,
         image_items: requestImages.map((img) => ({
           base64: img.base64,
           mime_type: img.mimeType,
@@ -337,12 +555,73 @@ const generatePost = async () => {
       throw new Error(data?.detail || 'Failed to generate caption.');
     }
 
+    if (shouldGenerateFluxImage) {
+      const generatedItems = Array.isArray(data.generated_images) ? data.generated_images : [];
+      if (generatedItems.length > 0) {
+        postImages = generatedItems
+          .filter((item) => item?.base64)
+          .map((item, index) => {
+            const mimeType = (item.mime_type || 'image/png').trim() || 'image/png';
+            const base64 = item.base64;
+            return {
+              base64,
+              mimeType,
+              name: `Generated image ${index + 1}`,
+              previewUrl: `data:${mimeType};base64,${base64}`,
+              source: 'flux',
+            };
+          });
+        postImageIndex = 0;
+        allowTextOnlyPost = false;
+        setPostEmptyMessage('Generate a post to preview it here.');
+      } else {
+        const generatedBase64 = (data.generated_image_base64 || '').trim();
+        const generatedMimeType = (data.generated_image_mime_type || 'image/png').trim() || 'image/png';
+        if (generatedBase64) {
+          postImages = [{
+            base64: generatedBase64,
+            mimeType: generatedMimeType,
+            name: 'Generated image',
+            previewUrl: `data:${generatedMimeType};base64,${generatedBase64}`,
+            source: 'flux',
+          }];
+          postImageIndex = 0;
+          allowTextOnlyPost = false;
+          setPostEmptyMessage('Generate a post to preview it here.');
+        } else {
+          postImages = [];
+          postImageIndex = 0;
+          allowTextOnlyPost = true;
+          imageGenerationFailureMessage = 'Post image generation failed. No image post available.';
+          setPostEmptyMessage('Post image generation failed. Try again.');
+        }
+      }
+      if (data.image_generation_error) {
+        postImages = [];
+        postImageIndex = 0;
+        allowTextOnlyPost = true;
+        imageGenerationFailureMessage = `Post image generation failed: ${data.image_generation_error}`;
+        setPostEmptyMessage('Post image generation failed. Try again.');
+      }
+    } else if (isNoImageAndModelNone) {
+      // Text-only mode is allowed when no image is provided and model is None.
+      postImages = [];
+      postImageIndex = 0;
+      allowTextOnlyPost = true;
+      setPostEmptyMessage('Generate a post to preview it here.');
+    } else {
+      allowTextOnlyPost = false;
+    }
+
     renderPoem(data.poetic_response || '');
+    updatePostVisibility();
+    renderCarousel();
 
     if (selectedImages.length > 0) {
       selectedImages = [];
       selectedImageIndex = 0;
       imageFileInput.value = '';
+      updateImageModelAvailability();
       leftImagePreview.classList.add('hidden');
       imageName.textContent = '';
       leftPreviewDots.innerHTML = '';
@@ -352,7 +631,11 @@ const generatePost = async () => {
     const message = error instanceof Error ? error.message : 'Unknown error';
     setError(`Failed: ${message}`);
   } finally {
+    updateImageModelAvailability();
     setLoading(false);
+    if (imageGenerationFailureMessage && latestCaption.trim()) {
+      flashStatus(imageGenerationFailureMessage);
+    }
   }
 };
 
@@ -445,25 +728,46 @@ const setupToneDropdown = () => {
   updateSelected();
 };
 
-window.addEventListener('dragover', preventDefaultDropBehavior);
-window.addEventListener('drop', preventDefaultDropBehavior);
+window.addEventListener('dragover', (event) => {
+  // Enable dropping files anywhere in app (especially useful on tight layouts).
+  if (event.dataTransfer?.types?.includes('Files')) {
+    event.preventDefault();
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = 'copy';
+    }
+  }
+});
+
+window.addEventListener('drop', async (event) => {
+  if (event.dataTransfer?.types?.includes('Files')) {
+    event.preventDefault();
+    const files = extractDroppedFiles(event);
+    // Drop on zone is handled there; elsewhere is handled globally.
+    if (!isInsideDropZone(event.target)) {
+      await handleIncomingFiles(files);
+    }
+  }
+});
 
 imageFileInput.addEventListener('change', async () => {
   const files = Array.from(imageFileInput.files ?? []);
   imageFileInput.value = '';
   if (files.length === 0) return;
-  try {
-    await setSelectedImages(files);
-    clearStatus();
-  } catch (error) {
-    revokeImageUrls();
-    selectedImages = [];
-    setError(error instanceof Error ? error.message : 'Invalid image.');
-  }
+  await handleIncomingFiles(files);
+});
+
+dropZone.addEventListener('dragenter', (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  dropZone.classList.add('drop-zone-active');
 });
 
 dropZone.addEventListener('dragover', (event) => {
   event.preventDefault();
+  event.stopPropagation();
+  if (event.dataTransfer) {
+    event.dataTransfer.dropEffect = 'copy';
+  }
   dropZone.classList.add('drop-zone-active');
 });
 
@@ -473,17 +777,10 @@ dropZone.addEventListener('dragleave', () => {
 
 dropZone.addEventListener('drop', async (event) => {
   event.preventDefault();
+  event.stopPropagation();
   dropZone.classList.remove('drop-zone-active');
-  const files = Array.from(event.dataTransfer?.files ?? []);
-  if (files.length === 0) return;
-  try {
-    await setSelectedImages(files);
-    clearStatus();
-  } catch (error) {
-    revokeImageUrls();
-    selectedImages = [];
-    setError(error instanceof Error ? error.message : 'Invalid image.');
-  }
+  const files = extractDroppedFiles(event);
+  await handleIncomingFiles(files);
 });
 
 dropZone.addEventListener('click', () => imageFileInput.click());
@@ -499,13 +796,184 @@ window.addEventListener('paste', async (event) => {
   const files = fileFromClipboard(event);
   if (files.length === 0) return;
   event.preventDefault();
+  await handleIncomingFiles(files);
+});
+
+imageModelSelect?.addEventListener('change', () => {
+  updateImageModelAvailability();
+});
+
+openImageSettingsButton?.addEventListener('click', () => {
+  if (imageModelSelect.value === 'none') return;
+  openImageSettingsModal();
+});
+
+closeImageSettingsButton?.addEventListener('click', () => {
+  closeImageSettingsModal();
+});
+
+saveImageSettingsButton?.addEventListener('click', () => {
+  imageGenerationSettings.aspect_ratio = aspectRatioSelect.value || '1:1';
+  imageGenerationSettings.image_count = Number.parseInt(imageCountSelect.value || '1', 10) || 1;
+  imageGenerationSettings.custom_art_style = (customStyleInput?.value || '').trim();
+  if ((artStyleSelect.value || 'Illustration') === 'Custom') {
+    imageGenerationSettings.art_style = imageGenerationSettings.custom_art_style || 'Custom';
+  } else {
+    imageGenerationSettings.art_style = artStyleSelect.value || 'Illustration';
+  }
+  imageGenerationSettings.custom_prompt = (customPromptInput.value || '').trim();
+  closeImageSettingsModal();
+});
+
+imageSettingsModal?.addEventListener('click', (event) => {
+  if (event.target === imageSettingsModal) {
+    closeImageSettingsModal();
+  }
+});
+
+artStyleOptions.forEach((option) => {
+  option.addEventListener('click', () => {
+    setArtStyleSelection(option.dataset.style || 'Illustration');
+  });
+});
+
+document.addEventListener('contextmenu', (event) => {
+  if (imageSettingsModal && !imageSettingsModal.classList.contains('hidden')) return;
+  event.preventDefault();
+  contextMenuTarget = event.target;
+  contextMenuImageEl = event.target instanceof HTMLImageElement ? event.target : null;
+  updateContextMenuState();
+  showContextMenu(event.clientX, event.clientY);
+});
+
+document.addEventListener('click', () => {
+  hideContextMenu();
+});
+
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') {
+    hideContextMenu();
+  }
+});
+
+ctxCut?.addEventListener('click', async () => {
+  if (!isTextInputElement(contextMenuTarget)) return;
+  const start = contextMenuTarget.selectionStart ?? 0;
+  const end = contextMenuTarget.selectionEnd ?? 0;
+  if (start === end) return;
+  const selected = contextMenuTarget.value.slice(start, end);
   try {
-    await setSelectedImages(files);
-    clearStatus();
-  } catch (error) {
-    revokeImageUrls();
-    selectedImages = [];
-    setError(error instanceof Error ? error.message : 'Invalid image.');
+    await navigator.clipboard.writeText(selected);
+    contextMenuTarget.setRangeText('', start, end, 'start');
+  } catch {
+    setError('Failed to cut text.');
+  } finally {
+    hideContextMenu();
+  }
+});
+
+ctxCopy?.addEventListener('click', async () => {
+  try {
+    if (isTextInputElement(contextMenuTarget)) {
+      const start = contextMenuTarget.selectionStart ?? 0;
+      const end = contextMenuTarget.selectionEnd ?? 0;
+      if (start !== end) {
+        await navigator.clipboard.writeText(contextMenuTarget.value.slice(start, end));
+        hideContextMenu();
+        return;
+      }
+    }
+    const selectionText = window.getSelection()?.toString().trim();
+    if (selectionText) {
+      await navigator.clipboard.writeText(selectionText);
+      hideContextMenu();
+      return;
+    }
+    if (latestCaption.trim()) {
+      await navigator.clipboard.writeText(latestCaption);
+      hideContextMenu();
+      return;
+    }
+  } catch {
+    setError('Failed to copy text.');
+  } finally {
+    hideContextMenu();
+  }
+});
+
+ctxPaste?.addEventListener('click', async () => {
+  if (!canPasteIntoTarget(contextMenuTarget)) return;
+  try {
+    const text = await navigator.clipboard.readText();
+    if (contextMenuTarget instanceof HTMLInputElement || contextMenuTarget instanceof HTMLTextAreaElement) {
+      const start = contextMenuTarget.selectionStart ?? contextMenuTarget.value.length;
+      const end = contextMenuTarget.selectionEnd ?? contextMenuTarget.value.length;
+      contextMenuTarget.setRangeText(text, start, end, 'end');
+      contextMenuTarget.dispatchEvent(new Event('input', { bubbles: true }));
+    } else if (contextMenuTarget instanceof HTMLElement && contextMenuTarget.isContentEditable) {
+      document.execCommand('insertText', false, text);
+    }
+  } catch {
+    setError('Failed to paste text.');
+  } finally {
+    hideContextMenu();
+  }
+});
+
+ctxRegenerate?.addEventListener('click', () => {
+  hideContextMenu();
+  if (!button.disabled) form.requestSubmit();
+});
+
+ctxReload?.addEventListener('click', () => {
+  hideContextMenu();
+  window.location.reload();
+});
+
+ctxClear?.addEventListener('click', () => {
+  hideContextMenu();
+  clearGeneratedOutput();
+});
+
+ctxCopyCaption?.addEventListener('click', async () => {
+  if (!latestCaption.trim()) return;
+  try {
+    await navigator.clipboard.writeText(latestCaption);
+    flashStatus('Caption copied.');
+  } catch {
+    setError('Failed to copy caption.');
+  } finally {
+    hideContextMenu();
+  }
+});
+
+ctxCopyImage?.addEventListener('click', async () => {
+  if (!contextMenuImageEl?.src) return;
+  try {
+    const response = await fetch(contextMenuImageEl.src);
+    const blob = await response.blob();
+    await navigator.clipboard.write([
+      new ClipboardItem({ [blob.type || 'image/png']: blob }),
+    ]);
+    flashStatus('Image copied.');
+  } catch {
+    setError('Failed to copy image.');
+  } finally {
+    hideContextMenu();
+  }
+});
+
+ctxDownloadImage?.addEventListener('click', async () => {
+  if (!contextMenuImageEl?.src) return;
+  try {
+    const a = document.createElement('a');
+    a.href = contextMenuImageEl.src;
+    a.download = `kavi-image-${Date.now()}.png`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  } finally {
+    hideContextMenu();
   }
 });
 
@@ -551,5 +1019,8 @@ document.addEventListener('keydown', (event) => {
 });
 
 setupToneDropdown();
+setArtStyleSelection(imageGenerationSettings.art_style);
+loadArtStyleThumbnails();
+updateImageModelAvailability();
 updatePostVisibility();
 renderCarousel();

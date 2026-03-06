@@ -120,10 +120,42 @@ h1 {
 }
 
 .controls-panel {
+  height: 100%;
   display: flex;
   flex-direction: column;
-  gap: 0.7rem;
-  overflow: auto;
+  gap: 0.85rem;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.controls-scroll {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  display: flex;
+  flex-direction: column;
+  gap: 0.95rem;
+  padding-right: 0.3rem;
+  padding-bottom: 0.55rem;
+}
+
+.controls-scroll label {
+  display: block;
+  margin-bottom: 0.22rem;
+}
+
+.controls-scroll .image-name {
+  margin-top: -0.05rem;
+  margin-bottom: 0;
+}
+
+.controls-scroll .left-image-preview {
+  margin-top: 0.1rem;
+  flex-shrink: 0;
 }
 
 input,
@@ -330,6 +362,17 @@ button {
   outline-offset: 2px;
 }
 
+.advanced-settings-btn {
+  background: #efe0c8;
+  color: #5e3a1f;
+  border: 1px solid #c4ab86;
+  font-weight: 600;
+}
+
+.advanced-settings-btn:hover:enabled {
+  background: #e5d0b0;
+}
+
 .visually-hidden {
   position: absolute;
   width: 1px;
@@ -431,7 +474,7 @@ button {
 }
 
 #generate-btn {
-  margin-top: auto;
+  flex: 0 0 auto;
 }
 
 button {
@@ -672,6 +715,170 @@ button:disabled {
   opacity: 0.45;
 }
 
+.settings-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(19, 16, 12, 0.45);
+  display: grid;
+  place-items: center;
+  z-index: 100;
+  padding: 1rem;
+}
+
+.settings-modal-panel {
+  width: min(540px, calc(100vw - 2rem));
+  border: 1px solid #d4c1a1;
+  border-radius: 12px;
+  background: #fffaf2;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.settings-modal-panel h3 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.settings-modal-panel textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 90px;
+  font-size: 0.95rem;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid #b59d7a;
+  border-radius: 8px;
+  font-family: inherit;
+}
+
+.art-style-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.art-style-option {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.32rem;
+  border-radius: 10px;
+  background: #f0e3ce;
+  border: 1px solid #c8b190;
+  color: #3e2b18;
+}
+
+.art-style-option:hover:enabled {
+  background: #ead7bb;
+}
+
+.art-style-option.active {
+  border-color: #2a6df4;
+  box-shadow: 0 0 0 2px rgba(42, 109, 244, 0.16) inset;
+}
+
+.art-style-thumb {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 8px;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  border: 1px solid rgba(84, 57, 30, 0.2);
+}
+
+.art-style-label {
+  font-size: 0.83rem;
+  font-weight: 600;
+  line-height: 1.1;
+}
+
+.style-illustration {
+  background-image: linear-gradient(140deg, #d9b894, #f5e0c7);
+}
+
+.style-photo {
+  background-image: linear-gradient(140deg, #2b2f36, #7b5b3c);
+}
+
+.style-abstract {
+  background-image: linear-gradient(140deg, #4d8fa8, #cde6f2);
+}
+
+.style-3d {
+  background-image: linear-gradient(140deg, #2f6aa2, #e5d8bf);
+}
+
+.style-line {
+  background-image: linear-gradient(140deg, #efefef, #cfcfcf);
+}
+
+.style-custom {
+  background-image: linear-gradient(140deg, #d8d8d8, #bdbdbd);
+}
+
+.settings-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.55rem;
+  margin-top: 0.2rem;
+}
+
+.settings-modal-actions .secondary-btn {
+  background: #e4d5bf;
+  color: #5a4125;
+}
+
+.settings-modal-actions .secondary-btn:hover:enabled {
+  background: #d8c5a6;
+}
+
+.context-menu {
+  position: fixed;
+  z-index: 200;
+  min-width: 212px;
+  padding: 0.24rem;
+  border-radius: 4px;
+  border: 1px solid #444d5e;
+  background: #232932;
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.35);
+  display: grid;
+  gap: 0.1rem;
+}
+
+.context-menu-item {
+  width: 100%;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: #dbdee6;
+  text-align: left;
+  padding: 0.36rem 0.48rem;
+  font-size: 0.78rem;
+  font-weight: 400;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.9rem;
+}
+
+.context-menu-item:hover:enabled {
+  background: #30343d;
+  color: #ffffff;
+}
+
+.context-menu-item:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.context-menu-sep {
+  height: 1px;
+  margin: 0.18rem 0.2rem;
+  background: rgba(194, 209, 244, 0.2);
+}
+
 .poem {
   margin: 0;
   white-space: pre-wrap;
@@ -681,7 +888,7 @@ button:disabled {
 }
 
 .output::-webkit-scrollbar,
-.controls-panel::-webkit-scrollbar,
+.controls-scroll::-webkit-scrollbar,
 .insta-caption-block::-webkit-scrollbar,
 .preview-panel::-webkit-scrollbar {
   width: 10px;
@@ -689,7 +896,7 @@ button:disabled {
 }
 
 .output::-webkit-scrollbar-track,
-.controls-panel::-webkit-scrollbar-track,
+.controls-scroll::-webkit-scrollbar-track,
 .insta-caption-block::-webkit-scrollbar-track,
 .preview-panel::-webkit-scrollbar-track {
   background: rgba(99, 112, 138, 0.22);
@@ -697,7 +904,7 @@ button:disabled {
 }
 
 .output::-webkit-scrollbar-thumb,
-.controls-panel::-webkit-scrollbar-thumb,
+.controls-scroll::-webkit-scrollbar-thumb,
 .insta-caption-block::-webkit-scrollbar-thumb,
 .preview-panel::-webkit-scrollbar-thumb {
   background: linear-gradient(180deg, #8d9bb8, #607195);
@@ -707,25 +914,25 @@ button:disabled {
 }
 
 .output,
-.controls-panel,
+.controls-scroll,
 .insta-caption-block,
 .preview-panel {
   scrollbar-width: thin;
   scrollbar-color: #607195 rgba(99, 112, 138, 0.22);
 }
 
-.controls-panel::-webkit-scrollbar-track {
+.controls-scroll::-webkit-scrollbar-track {
   background: rgba(181, 157, 122, 0.24);
 }
 
-.controls-panel::-webkit-scrollbar-thumb {
+.controls-scroll::-webkit-scrollbar-thumb {
   background: linear-gradient(180deg, #c6a67c, #8a6640);
   border-radius: 999px;
   border: 2px solid transparent;
   background-clip: content-box;
 }
 
-.controls-panel {
+.controls-scroll {
   scrollbar-color: #8a6640 rgba(181, 157, 122, 0.24);
 }
 
@@ -784,7 +991,7 @@ button:disabled {
 
   .controls-panel {
     order: 1;
-    overflow: visible;
+    overflow: hidden;
   }
 
   .preview-panel {
@@ -855,5 +1062,9 @@ button:disabled {
   .win-icon {
     width: 11px;
     height: 11px;
+  }
+
+  .art-style-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

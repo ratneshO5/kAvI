@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>kAvI Web</title>
     <link rel="icon" type="image/png" href="/static/app-icon.png" />
-    <link rel="stylesheet" href="/static/styles.css" />
+    <link rel="stylesheet" href="/static/styles.css?v=20260305b" />
   </head>
   <body>
     <main class="app-shell">
@@ -32,55 +32,65 @@
 
       <section class="workspace">
         <form id="post-form" class="panel controls-panel">
-          <label for="topic">Topic (optional)</label>
-          <input id="topic" name="topic" type="text" placeholder="What is on your mind?" />
+          <div class="controls-scroll">
+            <label for="topic">Topic (optional)</label>
+            <input id="topic" name="topic" type="text" placeholder="What is on your mind?" />
 
-          <label for="image_file">Image (optional)</label>
-          <input id="image_file" class="visually-hidden" name="image_file" type="file" accept="image/*" multiple />
-          <div id="drop-zone" class="drop-zone" tabindex="0" role="button" aria-label="Image uploader">
-            Drop image(s), paste image, or click to browse
+            <label for="image_file">Image (optional)</label>
+            <input id="image_file" class="visually-hidden" name="image_file" type="file" accept="image/*" multiple />
+            <div id="drop-zone" class="drop-zone" tabindex="0" role="button" aria-label="Image uploader">
+              Drop image(s), paste image, or click to browse
+            </div>
+            <p id="image-name" class="image-name"></p>
+            <label for="image-model">Image Model</label>
+            <select id="image-model" name="image_model">
+              <option value="flux" selected>FLUX</option>
+              <option value="none">None (no image generation)</option>
+            </select>
+            <button id="open-image-settings" class="advanced-settings-btn hidden" type="button">
+              Advanced Image Settings
+            </button>
+
+            <section id="left-image-preview" class="left-image-preview hidden" aria-label="Selected images quick preview">
+              <div class="left-preview-frame">
+                <button id="left-prev-image" class="preview-nav left-nav" type="button" aria-label="Previous image">&lt;</button>
+                <img id="left-preview-image" alt="Selected image quick preview" />
+                <button id="left-next-image" class="preview-nav left-nav" type="button" aria-label="Next image">&gt;</button>
+              </div>
+              <div class="left-preview-footer">
+                <span id="left-image-counter">0 / 0</span>
+                <div id="left-preview-dots" class="preview-dots" aria-label="Left image positions"></div>
+              </div>
+            </section>
+
+            <label for="tone">Tone</label>
+            <select id="tone" name="tone">
+              <option value="kAvI" selected>kAvI (Default)</option>
+              <optgroup label="TONES">
+                <option value="Minimalist">Minimalist</option>
+                <option value="Brutalist">Brutalist</option>
+                <option value="Aggressive/Defiant">Aggressive/Defiant</option>
+                <option value="Grunge">Grunge</option>
+                <option value="Vintage/Retro">Vintage/Retro</option>
+                <option value="Futuristic">Futuristic</option>
+                <option value="Melancholic">Melancholic</option>
+                <option value="Nostalgic">Nostalgic</option>
+                <option value="Passionate">Passionate</option>
+                <option value="Euphoric">Euphoric</option>
+                <option value="Spiritual">Spiritual</option>
+                <option value="Intellectual">Intellectual</option>
+                <option value="Optimistic">Optimistic</option>
+                <option value="Abstract">Abstract</option>
+                <option value="Satirical">Satirical</option>
+              </optgroup>
+              <optgroup label="SPECIAL MODES">
+                <option value="Raw Delhi Mode">Seedhe Maut</option>
+                <option value="Chaotic Humor Mode">Deadpool</option>
+                <option value="Street Emotional Mode">Jesse Pinkman</option>
+                <option value="Witty Strategist Mode">Tyrion Lannister</option>
+              </optgroup>
+            </select>
           </div>
-          <p id="image-name" class="image-name"></p>
-
-          <section id="left-image-preview" class="left-image-preview hidden" aria-label="Selected images quick preview">
-            <div class="left-preview-frame">
-              <button id="left-prev-image" class="preview-nav left-nav" type="button" aria-label="Previous image">&lt;</button>
-              <img id="left-preview-image" alt="Selected image quick preview" />
-              <button id="left-next-image" class="preview-nav left-nav" type="button" aria-label="Next image">&gt;</button>
-            </div>
-            <div class="left-preview-footer">
-              <span id="left-image-counter">0 / 0</span>
-              <div id="left-preview-dots" class="preview-dots" aria-label="Left image positions"></div>
-            </div>
-          </section>
-
-          <label for="tone">Tone</label>
-          <select id="tone" name="tone">
-            <option value="kAvI" selected>kAvI (Default)</option>
-            <optgroup label="TONES">
-              <option value="Minimalist">Minimalist</option>
-              <option value="Brutalist">Brutalist</option>
-              <option value="Aggressive/Defiant">Aggressive/Defiant</option>
-              <option value="Grunge">Grunge</option>
-              <option value="Vintage/Retro">Vintage/Retro</option>
-              <option value="Futuristic">Futuristic</option>
-              <option value="Melancholic">Melancholic</option>
-              <option value="Nostalgic">Nostalgic</option>
-              <option value="Passionate">Passionate</option>
-              <option value="Euphoric">Euphoric</option>
-              <option value="Spiritual">Spiritual</option>
-              <option value="Intellectual">Intellectual</option>
-              <option value="Optimistic">Optimistic</option>
-              <option value="Abstract">Abstract</option>
-              <option value="Satirical">Satirical</option>
-            </optgroup>
-            <optgroup label="SPECIAL MODES">
-              <option value="Raw Delhi Mode">Seedhe Maut</option>
-              <option value="Chaotic Humor Mode">Deadpool</option>
-              <option value="Street Emotional Mode">Jesse Pinkman</option>
-              <option value="Witty Strategist Mode">Tyrion Lannister</option>
-            </optgroup>
-          </select>
 
           <button id="generate-btn" type="submit">Generate</button>
         </form>
@@ -128,6 +138,83 @@
         </section>
       </section>
     </main>
+
+    <div id="image-settings-modal" class="settings-modal hidden" role="dialog" aria-modal="true" aria-labelledby="image-settings-title">
+      <div class="settings-modal-panel">
+        <h3 id="image-settings-title">Image Generation Settings</h3>
+        <label for="setting-aspect-ratio">Aspect Ratio</label>
+        <select id="setting-aspect-ratio">
+          <option value="1:1" selected>1:1 (Square)</option>
+          <option value="4:5">4:5 (Portrait)</option>
+          <option value="3:2">3:2 (Landscape)</option>
+          <option value="16:9">16:9 (Wide)</option>
+          <option value="9:16">9:16 (Vertical)</option>
+        </select>
+
+        <label for="setting-image-count">Number of Images</label>
+        <select id="setting-image-count">
+          <option value="1" selected>1</option>
+          <option value="2">2</option>
+          <option value="3">3</option>
+          <option value="4">4</option>
+        </select>
+
+        <label>Image art style</label>
+        <input id="setting-art-style" type="hidden" value="Illustration" />
+        <div class="art-style-grid" role="radiogroup" aria-label="Image art style">
+          <button type="button" class="art-style-option active" data-style="Illustration" role="radio" aria-checked="true">
+            <span class="art-style-thumb style-illustration"></span>
+            <span class="art-style-label">Illustration</span>
+          </button>
+          <button type="button" class="art-style-option" data-style="Photo" role="radio" aria-checked="false">
+            <span class="art-style-thumb style-photo"></span>
+            <span class="art-style-label">Photorealistic</span>
+          </button>
+          <button type="button" class="art-style-option" data-style="Abstract" role="radio" aria-checked="false">
+            <span class="art-style-thumb style-abstract"></span>
+            <span class="art-style-label">Abstract</span>
+          </button>
+          <button type="button" class="art-style-option" data-style="3D" role="radio" aria-checked="false">
+            <span class="art-style-thumb style-3d"></span>
+            <span class="art-style-label">3D</span>
+          </button>
+          <button type="button" class="art-style-option" data-style="Line-art" role="radio" aria-checked="false">
+            <span class="art-style-thumb style-line"></span>
+            <span class="art-style-label">Line-art</span>
+          </button>
+          <button type="button" class="art-style-option" data-style="Custom" role="radio" aria-checked="false">
+            <span class="art-style-thumb style-custom"></span>
+            <span class="art-style-label">Custom</span>
+          </button>
+        </div>
+        <div id="custom-style-wrap" class="hidden">
+          <label for="setting-custom-style">Custom art style</label>
+          <input id="setting-custom-style" type="text" placeholder="e.g. synthwave noir, claymation, ukiyo-e" />
+        </div>
+
+        <label for="setting-custom-prompt">Custom Prompt</label>
+        <textarea id="setting-custom-prompt" rows="4" placeholder="Add visual direction for image generation"></textarea>
+
+        <div class="settings-modal-actions">
+          <button id="close-image-settings" type="button" class="secondary-btn">Cancel</button>
+          <button id="save-image-settings" type="button">Save</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="context-menu" class="context-menu hidden" role="menu" aria-label="Context menu">
+      <button id="ctx-cut" type="button" class="context-menu-item" role="menuitem">Cut</button>
+      <button id="ctx-copy" type="button" class="context-menu-item" role="menuitem">Copy</button>
+      <button id="ctx-paste" type="button" class="context-menu-item" role="menuitem">Paste</button>
+      <div class="context-menu-sep" role="separator"></div>
+      <button id="ctx-regenerate" type="button" class="context-menu-item" role="menuitem">Regenerate</button>
+      <button id="ctx-reload" type="button" class="context-menu-item" role="menuitem">Reload</button>
+      <button id="ctx-clear" type="button" class="context-menu-item" role="menuitem">Clear Output</button>
+      <button id="ctx-copy-caption" type="button" class="context-menu-item" role="menuitem">Copy Caption</button>
+      <div class="context-menu-sep" role="separator"></div>
+      <button id="ctx-copy-image" type="button" class="context-menu-item" role="menuitem">Copy Image</button>
+      <button id="ctx-download-image" type="button" class="context-menu-item" role="menuitem">Download Image</button>
+    </div>
     <script src="/static/app.js"></script>
   </body>
 </html>

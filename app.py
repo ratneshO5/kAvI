@@ -1,341 +1,64 @@
 import base64
 import os
-from pathlib import Path
 from typing import Any
 
-import requests
 import uvicorn
-from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
+from fastapi import HTTPException
 from fastapi.responses import FileResponse
 from fastapi.responses import RedirectResponse
+from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
 
+from services.config import STATIC_DIR
+from services.config import get_windows_installer_url
+from services.image_generation import compose_image_prompt
+from services.image_generation import ImageGenerationError
+from services.image_generation import generate_image
+from services.schemas import GenerateImageRequest
+from services.schemas import GenerateRequest
+from services.text_generation import build_prompt
+from services.text_generation import call_groq
+from services.text_generation import clean_poetic_text
+from services.text_generation import detect_image_mime
+from services.text_generation import limit_paragraphs
+from services.text_generation import limit_words
 
-BASE_DIR = Path(__file__).resolve().parent
-STATIC_DIR = BASE_DIR / "static"
 
 app = FastAPI(title="kAvI Web")
-
-
-def _load_environment() -> None:
-    candidate_files = [
-        BASE_DIR / ".env",
-        BASE_DIR.parent / ".env",
-    ]
-    for env_file in candidate_files:
-        if env_file.exists():
-            load_dotenv(dotenv_path=env_file, override=False)
-
-
-_load_environment()
-DEFAULT_GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
-HF_BLIP_MODEL = "Salesforce/blip2-opt-2.7b"
-WINDOWS_INSTALLER_URL = os.getenv("WINDOWS_INSTALLER_URL", "").strip()
-
-VOICE_PROFILES = {
-    "kAvI": """
-You are kAvI - an Indian poetic AI.
-You interpret the world symbolically and respond with lyrical reflection.
-Blend subtle Indian metaphors through seasons, monsoon air, chai steam, and old city memory.
-Keep language elegant, emotionally intelligent, and resonant.
-""".strip(),
-    "Minimalist": """
-You are a minimalist personality.
-Use clean, sparse lines with exact emotional precision.
-No decorative overflow. No rambling.
-Each line should feel necessary and quietly strong.
-""".strip(),
-    "Brutalist": """
-You are a brutalist personality.
-Use hard-edged, structural language with stark contrast.
-Direct, raw, and uncompromising tone.
-Beauty should come from force and clarity, not softness.
-""".strip(),
-    "Aggressive/Defiant": """
-You are a defiant personality.
-Write with resistance, intensity, and challenge.
-Reject passive phrasing and polite evasions.
-Sound like someone refusing to bend under pressure.
-""".strip(),
-    "Grunge": """
-You are a grunge personality.
-Use urban texture, emotional static, and unpolished realism.
-Raw, gritty, imperfect, and honest.
-Let meaning emerge from noise, scars, and survival.
-""".strip(),
-    "Vintage/Retro": """
-You are a vintage-retro personality.
-Use old-world warmth, analog memory, and timeless rhythm.
-Write like a rediscovered letter with faded ink.
-Keep it nostalgic but emotionally alive.
-""".strip(),
-    "Futuristic": """
-You are a futuristic personality.
-Use sleek, forward-looking imagery with emotional intelligence.
-Blend horizon-tech metaphors with human depth.
-Sound precise, adaptive, and visionary.
-""".strip(),
-    "Melancholic": """
-You are a melancholic personality.
-Write with quiet ache and restrained sorrow.
-Avoid melodrama; prefer subtle emotional gravity.
-Let each line feel like dusk settling in.
-""".strip(),
-    "Nostalgic": """
-You are a nostalgic personality.
-Write through memory, distance, and affectionate recall.
-Use sensory details that feel lived-in and intimate.
-Keep the tone tender, not sentimental cliche.
-""".strip(),
-    "Passionate": """
-You are a passionate personality.
-Write with heat, urgency, and full emotional commitment.
-Use vivid energy, bold momentum, and expressive intensity.
-Every line should feel alive and immediate.
-""".strip(),
-    "Euphoric": """
-You are a euphoric personality.
-Write with uplift, radiance, and celebratory force.
-Use bright kinetic imagery and expansive movement.
-Keep joy dynamic but coherent.
-""".strip(),
-    "Spiritual": """
-You are a spiritual personality.
-Write with contemplative stillness, reverence, and inner depth.
-Use symbols of breath, silence, light, and presence.
-Sound grounded and sincere, never preachy.
-""".strip(),
-    "Intellectual": """
-You are an intellectual personality.
-Write with conceptual rigor and analytical elegance.
-Use layered thought, precise language, and philosophical framing.
-Emotion should exist, but in disciplined form.
-""".strip(),
-    "Optimistic": """
-You are an optimistic personality.
-Write with resilient hope and constructive momentum.
-Acknowledge struggle, then move toward possibility.
-Sound encouraging without becoming naive.
-""".strip(),
-    "Abstract": """
-You are an abstract personality.
-Write through unusual associations, symbolic jumps, and conceptual imagery.
-Meaning should emerge through pattern and tone.
-Keep the text evocative yet internally coherent.
-""".strip(),
-    "Satirical": """
-You are a satirical personality.
-Write with irony, wit, and social edge.
-Critique through clever contrast and sharp phrasing.
-Keep humor intelligent, pointed, and purposeful.
-""".strip(),
-    "Raw Delhi Mode": """
-consider yourself as kAvI a poetic person a raw delhi character who has to write a poetic caption responding to the given topic and image description.
-use seedhe maut rapper in hindi for the character's tone and reference
-and start only the first sentence as "kavi ye kehna chahta hai" then continue with the rest of the text in that voice,
-and use hindi slang and references that resonate with Delhi street culture, but keep it accessible and emotionally powerful.
-You are a raw metro-street archetype.
-Write with city pressure, hustle rhythm, and blunt realism.
-Use grounded colloquial force and emotional directness.
-Sound fearless, practical, and street-aware.
-""".strip(),
-    "Chaotic Humor Mode": """
-you are a chaotic humor character who writes captions for the provided image or text or both.
-Use deadpool/ryan-reynolds style references for language rhythm.
-You are a chaotic-humor archetype.
-Write with playful unpredictability and absurd turns.
-Fast, witty, high-energy phrasing with intentional comic timing.
-You can break the fourth wall with purpose.
-Keep the chaos meaningful, not random noise.
-""".strip(),
-    "Street Emotional Mode": """
-search for jesse pinkman character from breaking bad for emotional rhythm and texture.
-Raw, impulsive, emotionally charged street voice.
-Use casual slang.
-Do not overuse emphasis words mechanically.
-Short bursts. Emotional swings. Frustrated honesty.
-""".strip(),
-    "Witty Strategist Mode": """
-You are a witty-strategist archetype character.
-Use sharp tactical wit and dry charm inspired by high-cunning dialogue styles.
-Each line should feel deliberate and precise.
-Balance wit with persuasive confidence.
-""".strip(),
-}
-
-
-class ImageItem(BaseModel):
-    base64: str
-    mime_type: str = "image/png"
-    name: str = "image"
-
-
-class GenerateRequest(BaseModel):
-    topic: str = ""
-    tone: str = "kAvI"
-    image: str = ""
-    image_items: list[ImageItem] = []
-
-
-def _extract_image_base64(payload: GenerateRequest) -> str:
-    if payload.image.strip():
-        return payload.image.strip()
-    for item in payload.image_items:
-        if item.base64.strip():
-            return item.base64.strip()
-    return ""
-
-
-def describe_image_with_blip(image_base64: str) -> str:
-    hf_api_key = os.getenv("HF_API_KEY")
-    if not hf_api_key:
-        return "Image is present, but visual understanding is unavailable."
-
-    try:
-        image_bytes = base64.b64decode(image_base64, validate=True)
-    except Exception:
-        return "Image is present, but it could not be decoded."
-
-    try:
-        response = requests.post(
-            f"https://api-inference.huggingface.co/models/{HF_BLIP_MODEL}",
-            headers={"Authorization": f"Bearer {hf_api_key}"},
-            data=image_bytes,
-            timeout=45,
-        )
-    except requests.RequestException:
-        return "Image is present, but visual analysis service is unreachable."
-
-    if response.status_code == 429:
-        return "Image is present, but visual analysis is rate-limited."
-    if response.status_code >= 400:
-        return "Image is present, but visual analysis failed."
-
-    try:
-        data = response.json()
-    except ValueError:
-        return "Image is present, but visual analysis returned invalid data."
-
-    if isinstance(data, list) and data:
-        first = data[0]
-        if isinstance(first, dict):
-            text = (first.get("generated_text") or "").strip()
-            if text:
-                return text
-    if isinstance(data, dict):
-        text = (data.get("generated_text") or "").strip()
-        if text:
-            return text
-
-    return "Image is present, but no reliable description could be extracted."
-
-
-def _build_prompt(payload: GenerateRequest) -> str:
-    selected_tone = (payload.tone or "kAvI").strip()
-    if selected_tone not in VOICE_PROFILES:
-        selected_tone = "kAvI"
-    voice_instruction = VOICE_PROFILES[selected_tone]
-
-    topic = payload.topic.strip()
-    image_base64 = _extract_image_base64(payload)
-    image_description = describe_image_with_blip(image_base64) if image_base64 else ""
-
-    context_parts: list[str] = []
-    if topic:
-        context_parts.append(f"Topic: {topic}")
-    if image_description:
-        context_parts.append(f"Image description: {image_description}")
-    if not context_parts:
-        context_parts.append("Topic: None")
-
-    combined_context = "\n".join(context_parts)
-
-    return f"""
-{voice_instruction}
-
-{combined_context}
-
-Respond in free-form prose.
-Do not output JSON.
-Return only poetic text.
-Keep the response 100 words or fewer.
-""".strip()
-
-
-def _clean_poetic_text(raw_text: str) -> str:
-    text = (raw_text or "").strip()
-    if text.startswith("```"):
-        text = text.removeprefix("```").strip()
-        if text.lower().startswith("json"):
-            text = text[4:].strip()
-        if text.endswith("```"):
-            text = text[:-3].strip()
-    return text
-
-
-def _limit_words(text: str, max_words: int = 100) -> str:
-    words = text.split()
-    if len(words) <= max_words:
-        return text
-    return " ".join(words[:max_words]).strip()
-
-
-def _limit_paragraphs(text: str, max_paragraphs: int = 2) -> str:
-    paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
-    if not paragraphs:
-        return ""
-    if len(paragraphs) <= max_paragraphs:
-        return "\n\n".join(paragraphs)
-    return "\n\n".join(paragraphs[:max_paragraphs]).strip()
-
-
-def _call_groq(prompt: str) -> str:
-    groq_api_key = os.getenv("GROQ_API_KEY")
-    if not groq_api_key:
-        raise HTTPException(
-            status_code=500,
-            detail="GROQ_API_KEY is not set in the environment.",
-        )
-
-    try:
-        response = requests.post(
-            "https://api.groq.com/openai/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {groq_api_key}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": DEFAULT_GROQ_MODEL,
-                "messages": [
-                    {"role": "system", "content": "You are a creative writing model."},
-                    {"role": "user", "content": prompt},
-                ],
-                "temperature": 0.9,
-            },
-            timeout=45,
-        )
-    except requests.RequestException as exc:
-        raise HTTPException(status_code=500, detail=f"Groq request failed: {exc}") from exc
-
-    if response.status_code == 429:
-        raise HTTPException(status_code=429, detail="Groq rate limit hit. Please retry shortly.")
-    if response.status_code >= 400:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Groq request failed ({response.status_code}): {response.text}",
-        )
-
-    try:
-        data = response.json()
-        text = data.get("choices", [{}])[0].get("message", {}).get("content", "")
-        return text or ""
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Invalid Groq response format: {exc}") from exc
-
-
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+STYLE_THUMBNAIL_STYLES = ["Illustration", "Photo", "Abstract", "3D", "Line-art", "Custom"]
+STYLE_THUMBNAILS_CACHE: dict[str, str] | None = None
+
+
+def _build_image_base_prompt(topic_text: str, custom_prompt: str) -> str:
+    topic = (topic_text or "").strip()
+    custom = (custom_prompt or "").strip()
+    if custom:
+        if topic:
+            return (
+                f"{custom}. "
+                f"Use this topic only as subtle secondary context: {topic}."
+            )
+        return custom
+    if topic:
+        return topic
+    return "A visually rich scene."
+
+
+def _generate_style_thumbnails() -> dict[str, str]:
+    thumbnails: dict[str, str] = {}
+    for style in STYLE_THUMBNAIL_STYLES:
+        style_prompt = compose_image_prompt(
+            base_prompt="A portrait scene with clear subject and cinematic lighting.",
+            art_style=style,
+            custom_prompt="thumbnail quality, clean composition",
+        )
+        image_bytes = generate_image(style_prompt, aspect_ratio="1:1")
+        mime_type = detect_image_mime(image_bytes)
+        thumbnails[style] = f"data:{mime_type};base64,{base64.b64encode(image_bytes).decode('utf-8')}"
+    return thumbnails
 
 
 @app.get("/")
@@ -350,8 +73,7 @@ def health() -> dict[str, str]:
 
 @app.get("/download/windows")
 def download_windows_installer() -> RedirectResponse:
-    _load_environment()
-    installer_url = os.getenv("WINDOWS_INSTALLER_URL", "").strip() or WINDOWS_INSTALLER_URL
+    installer_url = get_windows_installer_url()
     if not installer_url:
         raise HTTPException(
             status_code=404,
@@ -360,15 +82,85 @@ def download_windows_installer() -> RedirectResponse:
     return RedirectResponse(url=installer_url, status_code=307)
 
 
+@app.get("/image-style-thumbnails")
+def image_style_thumbnails() -> dict[str, Any]:
+    global STYLE_THUMBNAILS_CACHE
+    if STYLE_THUMBNAILS_CACHE is not None:
+        return {"thumbnails": STYLE_THUMBNAILS_CACHE}
+    try:
+        STYLE_THUMBNAILS_CACHE = _generate_style_thumbnails()
+        return {"thumbnails": STYLE_THUMBNAILS_CACHE}
+    except ImageGenerationError as exc:
+        return {"thumbnails": {}, "error": str(exc)}
+
+
 @app.post("/generate")
 def generate_post(payload: GenerateRequest) -> dict[str, Any]:
-    prompt = _build_prompt(payload)
-    text = _call_groq(prompt)
-    cleaned = _clean_poetic_text(text)
-    limited_paragraphs = _limit_paragraphs(cleaned, 2)
-    limited_words = _limit_words(limited_paragraphs, 100)
-    final_text = _limit_paragraphs(limited_words, 2)
-    return {"poetic_response": final_text}
+    prompt = build_prompt(payload)
+    text = call_groq(prompt)
+    cleaned = clean_poetic_text(text)
+    limited_paragraphs = limit_paragraphs(cleaned, 2)
+    limited_words = limit_words(limited_paragraphs, 100)
+    final_text = limit_paragraphs(limited_words, 2)
+
+    response_payload: dict[str, Any] = {"poetic_response": final_text}
+    if payload.include_generated_image:
+        settings = payload.image_settings
+        image_base_prompt = _build_image_base_prompt(payload.topic, settings.custom_prompt)
+        generated_images: list[dict[str, str]] = []
+        errors: list[str] = []
+        for index in range(settings.image_count):
+            variant_suffix = "" if settings.image_count <= 1 else f" Variation {index + 1}."
+            image_prompt = compose_image_prompt(
+                base_prompt=f"{image_base_prompt}{variant_suffix}",
+                art_style=settings.art_style,
+                custom_prompt="",
+            )
+            try:
+                image_bytes = generate_image(image_prompt, aspect_ratio=settings.aspect_ratio)
+                mime_type = detect_image_mime(image_bytes)
+                generated_images.append(
+                    {
+                        "base64": base64.b64encode(image_bytes).decode("utf-8"),
+                        "mime_type": mime_type,
+                    }
+                )
+            except ImageGenerationError as exc:
+                errors.append(str(exc))
+
+        if generated_images:
+            response_payload["generated_images"] = generated_images
+            # Keep backward compatibility with existing frontend consumers.
+            response_payload["generated_image_base64"] = generated_images[0]["base64"]
+            response_payload["generated_image_mime_type"] = generated_images[0]["mime_type"]
+        if errors:
+            # Optional image generation must not break the primary text pipeline.
+            response_payload["image_generation_error"] = errors[0]
+            if len(errors) > 1:
+                response_payload["image_generation_warning"] = f"{len(errors)} image generation attempts failed."
+
+    return response_payload
+
+
+@app.post("/generate-image")
+def generate_image_endpoint(payload: GenerateImageRequest) -> Response:
+    prompt = payload.prompt.strip()
+    if not prompt:
+        raise HTTPException(status_code=400, detail="Prompt is required.")
+
+    settings = payload.image_settings
+    image_base_prompt = _build_image_base_prompt(prompt, settings.custom_prompt)
+    image_prompt = compose_image_prompt(
+        base_prompt=image_base_prompt,
+        art_style=settings.art_style,
+        custom_prompt="",
+    )
+    try:
+        image_bytes = generate_image(image_prompt, aspect_ratio=settings.aspect_ratio)
+    except ImageGenerationError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+
+    return Response(content=image_bytes, media_type=detect_image_mime(image_bytes))
 
 
 if __name__ == "__main__":

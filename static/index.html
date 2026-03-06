@@ -189,7 +189,14 @@
         </div>
         <div id="custom-style-wrap" class="hidden">
           <label for="setting-custom-style">Custom art style</label>
-          <input id="setting-custom-style" type="text" placeholder="e.g. synthwave noir, claymation, ukiyo-e" />
+          <div id="custom-style-composer" class="custom-style-composer">
+            <div id="custom-style-image-chips" class="custom-style-image-chips" aria-live="polite"></div>
+            <textarea
+              id="setting-custom-style"
+              rows="1"
+              placeholder="Write custom style, then paste/drop style image(s) here"
+            ></textarea>
+          </div>
         </div>
 
         <label for="setting-custom-prompt">Custom Prompt</label>
@@ -211,7 +218,7 @@
       <button id="ctx-reload" type="button" class="context-menu-item" role="menuitem">Reload</button>
       <button id="ctx-clear" type="button" class="context-menu-item" role="menuitem">Clear Output</button>
       <button id="ctx-copy-caption" type="button" class="context-menu-item" role="menuitem">Copy Caption</button>
-      <div class="context-menu-sep" role="separator"></div>
+      <div id="ctx-media-sep" class="context-menu-sep" role="separator"></div>
       <button id="ctx-copy-image" type="button" class="context-menu-item" role="menuitem">Copy Image</button>
       <button id="ctx-download-image" type="button" class="context-menu-item" role="menuitem">Download Image</button>
     </div>

@@ -752,6 +752,103 @@ button:disabled {
   font-family: inherit;
 }
 
+.custom-style-composer {
+  min-height: 56px;
+  border: 1px solid #b59d7a;
+  border-radius: 10px;
+  background: #fffdf8;
+  padding: 0.4rem 0.45rem 0.36rem;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.3rem;
+}
+
+.custom-style-composer:focus-within,
+.custom-style-composer.drag-active {
+  outline: none;
+  border-color: #6e4423;
+  box-shadow: 0 0 0 3px rgba(110, 68, 35, 0.16);
+}
+
+.custom-style-composer textarea {
+  width: 100%;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  padding: 0.14rem 0;
+  min-height: 1.5rem;
+  max-height: 7.6rem;
+  resize: none;
+  overflow-y: hidden;
+  font-size: 0.95rem;
+  line-height: 1.4;
+  font-family: inherit;
+  color: #2c2418;
+}
+
+.custom-style-composer textarea:focus {
+  outline: none;
+}
+
+.custom-style-image-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.custom-style-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.34rem;
+  max-width: 100%;
+  padding: 0.2rem 0.38rem 0.2rem 0.3rem;
+  border-radius: 999px;
+  border: 1px solid #3f4652;
+  background: #262c36;
+  color: #e6ebf5;
+}
+
+.custom-style-chip::before {
+  content: "";
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background: radial-gradient(circle at 30% 30%, #f4d7b1 0%, #b87e4d 70%, #3d2e2a 100%);
+  flex: 0 0 auto;
+}
+
+.custom-style-chip-label {
+  font-size: 0.82rem;
+  line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 185px;
+}
+
+.custom-style-chip-remove {
+  width: 1rem;
+  min-width: 1rem;
+  height: 1rem;
+  min-height: 1rem;
+  border: none;
+  border-radius: 999px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  color: #cfd7e8;
+  font-size: 0.82rem;
+  line-height: 1;
+}
+
+.custom-style-chip-remove:hover:enabled {
+  background: rgba(216, 228, 250, 0.14);
+  color: #ffffff;
+}
+
 .art-style-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

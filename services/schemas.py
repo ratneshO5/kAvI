@@ -13,6 +13,7 @@ class ImageGenerationSettings(BaseModel):
     image_count: int = Field(default=1, ge=1, le=4)
     art_style: str = "None"
     custom_prompt: str = ""
+    custom_style_images: list[ImageItem] = []
 
 
 class GenerateRequest(BaseModel):

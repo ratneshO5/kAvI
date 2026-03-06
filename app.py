@@ -32,19 +32,30 @@ STYLE_THUMBNAIL_STYLES = ["Illustration", "Photo", "Abstract", "3D", "Line-art",
 STYLE_THUMBNAILS_CACHE: dict[str, str] | None = None
 
 
-def _build_image_base_prompt(topic_text: str, custom_prompt: str) -> str:
+def _build_image_base_prompt(topic_text: str, custom_prompt: str, style_reference_names: list[str] | None = None) -> str:
     topic = (topic_text or "").strip()
     custom = (custom_prompt or "").strip()
+    style_reference_names = style_reference_names or []
+    style_reference_instruction = ""
+    if style_reference_names:
+        joined_names = ", ".join(name.strip() for name in style_reference_names if name.strip())
+        if joined_names:
+            style_reference_instruction = (
+                f" Match the artistic language of the attached style reference images: {joined_names}."
+            )
+        else:
+            style_reference_instruction = " Match the artistic language of the attached style reference images."
+
     if custom:
         if topic:
             return (
                 f"{custom}. "
                 f"Use this topic only as subtle secondary context: {topic}."
-            )
-        return custom
+            ) + style_reference_instruction
+        return f"{custom}{style_reference_instruction}"
     if topic:
-        return topic
-    return "A visually rich scene."
+        return f"{topic}{style_reference_instruction}"
+    return f"A visually rich scene.{style_reference_instruction}"
 
 
 def _generate_style_thumbnails() -> dict[str, str]:
@@ -106,7 +117,12 @@ def generate_post(payload: GenerateRequest) -> dict[str, Any]:
     response_payload: dict[str, Any] = {"poetic_response": final_text}
     if payload.include_generated_image:
         settings = payload.image_settings
-        image_base_prompt = _build_image_base_prompt(payload.topic, settings.custom_prompt)
+        style_reference_names = [item.name for item in settings.custom_style_images if item.name]
+        image_base_prompt = _build_image_base_prompt(
+            payload.topic,
+            settings.custom_prompt,
+            style_reference_names,
+        )
         generated_images: list[dict[str, str]] = []
         errors: list[str] = []
         for index in range(settings.image_count):
@@ -149,7 +165,8 @@ def generate_image_endpoint(payload: GenerateImageRequest) -> Response:
         raise HTTPException(status_code=400, detail="Prompt is required.")
 
     settings = payload.image_settings
-    image_base_prompt = _build_image_base_prompt(prompt, settings.custom_prompt)
+    style_reference_names = [item.name for item in settings.custom_style_images if item.name]
+    image_base_prompt = _build_image_base_prompt(prompt, settings.custom_prompt, style_reference_names)
     image_prompt = compose_image_prompt(
         base_prompt=image_base_prompt,
         art_style=settings.art_style,

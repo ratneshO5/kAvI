@@ -20,7 +20,9 @@ const imageCountSelect = document.getElementById('setting-image-count');
 const artStyleSelect = document.getElementById('setting-art-style');
 const artStyleOptions = Array.from(document.querySelectorAll('.art-style-option'));
 const customStyleWrap = document.getElementById('custom-style-wrap');
+const customStyleComposer = document.getElementById('custom-style-composer');
 const customStyleInput = document.getElementById('setting-custom-style');
+const customStyleImageChips = document.getElementById('custom-style-image-chips');
 const customPromptInput = document.getElementById('setting-custom-prompt');
 const closeImageSettingsButton = document.getElementById('close-image-settings');
 const saveImageSettingsButton = document.getElementById('save-image-settings');
@@ -32,6 +34,7 @@ const ctxRegenerate = document.getElementById('ctx-regenerate');
 const ctxReload = document.getElementById('ctx-reload');
 const ctxClear = document.getElementById('ctx-clear');
 const ctxCopyCaption = document.getElementById('ctx-copy-caption');
+const ctxMediaSep = document.getElementById('ctx-media-sep');
 const ctxCopyImage = document.getElementById('ctx-copy-image');
 const ctxDownloadImage = document.getElementById('ctx-download-image');
 
@@ -59,12 +62,14 @@ let allowTextOnlyPost = false;
 let copyFeedbackTimeout = null;
 let contextMenuTarget = null;
 let contextMenuImageEl = null;
+let customStyleImages = [];
 const imageGenerationSettings = {
   aspect_ratio: '1:1',
   image_count: 1,
   art_style: 'Illustration',
   custom_art_style: '',
   custom_prompt: '',
+  custom_style_images: [],
 };
 const IMAGE_NAME_PATTERN = /\.(png|jpe?g|gif|webp|bmp|heic|heif|avif)$/i;
 const MAX_UPLOAD_EDGE = 1600;
@@ -103,6 +108,7 @@ const setError = (message) => {
 const clearStatus = () => {
   status.textContent = '';
   status.className = '';
+  status.style.removeProperty('animation');
 };
 
 const setPostEmptyMessage = (message) => {
@@ -129,6 +135,11 @@ const openImageSettingsModal = () => {
   if (customStyleInput) {
     customStyleInput.value = imageGenerationSettings.custom_art_style || '';
   }
+  autoResizeCustomStyleInput();
+  customStyleImages = Array.isArray(imageGenerationSettings.custom_style_images)
+    ? [...imageGenerationSettings.custom_style_images]
+    : [];
+  renderCustomStyleImageChips();
   customPromptInput.value = imageGenerationSettings.custom_prompt;
   imageSettingsModal.classList.remove('hidden');
 };
@@ -136,6 +147,17 @@ const openImageSettingsModal = () => {
 const closeImageSettingsModal = () => {
   if (!imageSettingsModal) return;
   imageSettingsModal.classList.add('hidden');
+};
+
+const autoResizeCustomStyleInput = () => {
+  if (!customStyleInput) return;
+  const styles = window.getComputedStyle(customStyleInput);
+  const lineHeight = Number.parseFloat(styles.lineHeight) || 21;
+  const maxHeight = Math.ceil((lineHeight * 5) + 8);
+  customStyleInput.style.height = 'auto';
+  const nextHeight = Math.min(customStyleInput.scrollHeight, maxHeight);
+  customStyleInput.style.height = `${nextHeight}px`;
+  customStyleInput.style.overflowY = customStyleInput.scrollHeight > maxHeight ? 'auto' : 'hidden';
 };
 
 const setArtStyleSelection = (style) => {
@@ -172,6 +194,11 @@ const loadArtStyleThumbnails = async () => {
 const flashStatus = (message, durationMs = 1800) => {
   status.textContent = message;
   status.className = 'status-copy-flash';
+  if (durationMs > 4000) {
+    status.style.animation = 'none';
+  } else {
+    status.style.removeProperty('animation');
+  }
   window.setTimeout(() => {
     if (status.className === 'status-copy-flash' && status.textContent === message) {
       clearStatus();
@@ -197,6 +224,26 @@ const canPasteIntoTarget = (target) => {
   return false;
 };
 
+const isInsideCaptionArea = (target) => {
+  if (!(target instanceof Node)) return false;
+  return (
+    target === output ||
+    output.contains(target) ||
+    target === status ||
+    status.contains(target)
+  );
+};
+
+const isPostImageTarget = (target) => {
+  if (!(target instanceof HTMLImageElement)) return false;
+  return (
+    target === previewImage ||
+    target === leftPreviewImage ||
+    target.closest('#image-preview') !== null ||
+    target.closest('#left-image-preview') !== null
+  );
+};
+
 const hasTextSelection = () => {
   const selection = window.getSelection();
   return !!selection && selection.toString().trim().length > 0;
@@ -215,6 +262,8 @@ const updateContextMenuState = () => {
     ? contextMenuTarget.selectionStart !== contextMenuTarget.selectionEnd
     : false;
   const canCutCopyFromInput = isTextInputElement(contextMenuTarget) && inputSelection;
+  const onCaptionArea = isInsideCaptionArea(contextMenuTarget);
+  const onPostImage = !!contextMenuImageEl;
 
   ctxCut.disabled = !canCutCopyFromInput;
   ctxCopy.disabled = !(selectedText || canCutCopyFromInput || latestCaption.trim());
@@ -225,6 +274,11 @@ const updateContextMenuState = () => {
   ctxCopyCaption.disabled = !latestCaption.trim();
   ctxCopyImage.disabled = !contextMenuImageEl || !contextMenuImageEl.src;
   ctxDownloadImage.disabled = !contextMenuImageEl || !contextMenuImageEl.src;
+
+  ctxCopyCaption.classList.toggle('hidden', !onCaptionArea);
+  ctxMediaSep?.classList.toggle('hidden', !onPostImage);
+  ctxCopyImage.classList.toggle('hidden', !onPostImage);
+  ctxDownloadImage.classList.toggle('hidden', !onPostImage);
 };
 
 const showContextMenu = (x, y) => {
@@ -425,6 +479,54 @@ const fileToSelectedImage = (file) => {
         reject(error instanceof Error ? error : new Error('Failed to process image.'));
       });
   });
+};
+
+const fileToStyleReferenceImage = async (file) => {
+  const normalized = await fileToSelectedImage(file);
+  return {
+    base64: normalized.base64,
+    mime_type: normalized.mimeType,
+    name: normalized.name,
+  };
+};
+
+const renderCustomStyleImageChips = () => {
+  if (!customStyleImageChips) return;
+  customStyleImageChips.innerHTML = '';
+
+  customStyleImages.forEach((image, index) => {
+    const chip = document.createElement('span');
+    chip.className = 'custom-style-chip';
+
+    const label = document.createElement('span');
+    label.className = 'custom-style-chip-label';
+    label.textContent = image.name || `image-${index + 1}.png`;
+
+    const removeButton = document.createElement('button');
+    removeButton.type = 'button';
+    removeButton.className = 'custom-style-chip-remove';
+    removeButton.setAttribute('aria-label', `Remove ${label.textContent}`);
+    removeButton.textContent = 'x';
+    removeButton.addEventListener('click', () => {
+      customStyleImages = customStyleImages.filter((_, currentIndex) => currentIndex !== index);
+      renderCustomStyleImageChips();
+    });
+
+    chip.appendChild(label);
+    chip.appendChild(removeButton);
+    customStyleImageChips.appendChild(chip);
+  });
+};
+
+const addCustomStyleImages = async (files) => {
+  if (!files || files.length === 0) return;
+  const imageFiles = files.filter((file) => isLikelyImageFile(file));
+  if (imageFiles.length === 0) {
+    throw new Error('Only image files are supported for custom art style.');
+  }
+  const mapped = await Promise.all(imageFiles.map((file) => fileToStyleReferenceImage(file)));
+  customStyleImages = [...customStyleImages, ...mapped];
+  renderCustomStyleImageChips();
 };
 
 const setSelectedImages = async (files) => {
@@ -634,7 +736,7 @@ const generatePost = async () => {
     updateImageModelAvailability();
     setLoading(false);
     if (imageGenerationFailureMessage && latestCaption.trim()) {
-      flashStatus(imageGenerationFailureMessage);
+      flashStatus(imageGenerationFailureMessage, 15000);
     }
   }
 };
@@ -795,8 +897,53 @@ dropZone.addEventListener('keydown', (event) => {
 window.addEventListener('paste', async (event) => {
   const files = fileFromClipboard(event);
   if (files.length === 0) return;
+  if (
+    imageSettingsModal &&
+    !imageSettingsModal.classList.contains('hidden') &&
+    customStyleWrap &&
+    event.target instanceof Node &&
+    customStyleWrap.contains(event.target)
+  ) {
+    event.preventDefault();
+    try {
+      await addCustomStyleImages(files);
+      clearStatus();
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Invalid custom style image.');
+    }
+    return;
+  }
   event.preventDefault();
   await handleIncomingFiles(files);
+});
+
+customStyleInput?.addEventListener('input', () => {
+  autoResizeCustomStyleInput();
+});
+
+customStyleInput?.addEventListener('dragover', (event) => {
+  if (event.dataTransfer?.types?.includes('Files')) {
+    event.preventDefault();
+    event.stopPropagation();
+    customStyleComposer?.classList.add('drag-active');
+  }
+});
+
+customStyleInput?.addEventListener('dragleave', () => {
+  customStyleComposer?.classList.remove('drag-active');
+});
+
+customStyleInput?.addEventListener('drop', async (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  customStyleComposer?.classList.remove('drag-active');
+  const files = extractDroppedFiles(event);
+  try {
+    await addCustomStyleImages(files);
+    clearStatus();
+  } catch (error) {
+    setError(error instanceof Error ? error.message : 'Invalid custom style image.');
+  }
 });
 
 imageModelSelect?.addEventListener('change', () => {
@@ -821,6 +968,7 @@ saveImageSettingsButton?.addEventListener('click', () => {
   } else {
     imageGenerationSettings.art_style = artStyleSelect.value || 'Illustration';
   }
+  imageGenerationSettings.custom_style_images = [...customStyleImages];
   imageGenerationSettings.custom_prompt = (customPromptInput.value || '').trim();
   closeImageSettingsModal();
 });
@@ -841,7 +989,7 @@ document.addEventListener('contextmenu', (event) => {
   if (imageSettingsModal && !imageSettingsModal.classList.contains('hidden')) return;
   event.preventDefault();
   contextMenuTarget = event.target;
-  contextMenuImageEl = event.target instanceof HTMLImageElement ? event.target : null;
+  contextMenuImageEl = isPostImageTarget(event.target) ? event.target : null;
   updateContextMenuState();
   showContextMenu(event.clientX, event.clientY);
 });
@@ -1021,6 +1169,7 @@ document.addEventListener('keydown', (event) => {
 setupToneDropdown();
 setArtStyleSelection(imageGenerationSettings.art_style);
 loadArtStyleThumbnails();
+autoResizeCustomStyleInput();
 updateImageModelAvailability();
 updatePostVisibility();
 renderCarousel();
